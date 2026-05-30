@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-sand;
+  }
+
+  body {
+    @apply m-0 bg-cream font-sans text-ink antialiased;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    @apply outline-none;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-white/70 bg-white shadow-card;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-sand bg-white px-3.5 py-2.5 text-sm text-ink transition placeholder:text-slate-400 focus:border-moss focus:ring-4 focus:ring-moss/10;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-forest px-4 py-2.5 text-sm font-bold text-white transition hover:bg-moss disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-sand bg-white px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-sand/60 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+}
+

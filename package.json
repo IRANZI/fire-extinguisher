@@ -1,0 +1,19 @@
+{
+  "name": "fire-extinguisher-management-system",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build -w @fems/shared && npm run build -w @fems/auth-service && npm run build -w @fems/inventory-service && npm run build -w @fems/notification-service && npm run build -w @fems/api-gateway && npm run build -w @fems/frontend",
+    "dev:auth": "npm run dev -w @fems/auth-service",
+    "dev:inventory": "npm run dev -w @fems/inventory-service",
+    "dev:notification": "npm run dev -w @fems/notification-service",
+    "dev:gateway": "npm run dev -w @fems/api-gateway",
+    "dev:frontend": "npm run dev -w @fems/frontend"
+  }
+}
+
