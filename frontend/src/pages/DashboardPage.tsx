@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  BarChart3,
   Bell,
   BookOpen,
   Boxes,
   CheckCircle2,
+  CalendarCheck,
   ClipboardList,
   Flame,
   LayoutDashboard,
@@ -14,15 +16,28 @@ import {
   RefreshCcw,
   Search,
   ShieldAlert,
+  SlidersHorizontal,
+  Pencil,
+  Trash2,
+  CircleCheck,
   UserCircle,
   UserCog,
   Users,
+  Wrench,
   X,
 } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { CustomerForm, ExtinguisherForm, ProfileForm } from "../components/Forms";
+import {
+  HistoryModal,
+  InspectionsPanel,
+  ManagementReportsPanel,
+  NotificationSettingsPanel,
+  ServiceRequestsPanel,
+} from "../components/Operations";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import {
   clearFeedback,
@@ -35,11 +50,11 @@ import {
   markNotificationRead,
   runExpiryScan,
 } from "../store/inventorySlice";
-import type { Extinguisher, Role } from "../types";
+import type { Customer, Extinguisher, Role } from "../types";
 import { api, getErrorMessage } from "../lib/api";
 import type { Pagination as PaginationType, User } from "../types";
 
-type Section = "dashboard" | "extinguishers" | "customers" | "users" | "notifications" | "reports" | "logs" | "profile";
+type Section = "dashboard" | "extinguishers" | "customers" | "users" | "inspections" | "serviceRequests" | "notifications" | "managementReports" | "reports" | "settings" | "logs" | "profile";
 
 const date = (value?: string) => value ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(value)) : "-";
 const stamp = (value: string) => new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -66,8 +81,12 @@ const nav = [
   { id: "extinguishers", label: "Extinguishers", icon: Boxes, roles: ["ADMIN", "STAFF", "POLICE", "CUSTOMER"] },
   { id: "customers", label: "Customers", icon: Users, roles: ["ADMIN", "STAFF"] },
   { id: "users", label: "User accounts", icon: UserCog, roles: ["ADMIN"] },
+  { id: "inspections", label: "Inspections", icon: CalendarCheck, roles: ["ADMIN", "STAFF", "CUSTOMER"] },
+  { id: "serviceRequests", label: "Service requests", icon: Wrench, roles: ["ADMIN", "STAFF", "CUSTOMER"] },
   { id: "notifications", label: "Notifications", icon: Bell, roles: ["ADMIN", "STAFF", "POLICE", "CUSTOMER"] },
+  { id: "managementReports", label: "Management reports", icon: BarChart3, roles: ["ADMIN", "STAFF"] },
   { id: "reports", label: "Police reports", icon: ShieldAlert, roles: ["ADMIN", "STAFF", "POLICE"] },
+  { id: "settings", label: "Settings", icon: SlidersHorizontal, roles: ["ADMIN"] },
   { id: "logs", label: "Audit logs", icon: BookOpen, roles: ["ADMIN", "STAFF"] },
   { id: "profile", label: "My profile", icon: UserCircle, roles: ["CUSTOMER"] },
 ] as const;
@@ -80,11 +99,11 @@ const Metric = ({ label, value, icon: Icon, tone }: { label: string; value: numb
   </div>
 );
 
-const EquipmentTable = ({ equipment }: { equipment: Extinguisher[] }) => (
+const EquipmentTable = ({ equipment, onHistory }: { equipment: Extinguisher[]; onHistory?: (item: Extinguisher) => void }) => (
   <div className="overflow-x-auto">
     <table className="min-w-full text-left text-sm">
       <thead><tr className="border-b border-sand text-xs uppercase tracking-wider text-slate-400">
-        <th className="px-4 py-3">Serial / type</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Purchase</th><th className="px-4 py-3">Expiry</th><th className="px-4 py-3">Status</th>
+        <th className="px-4 py-3">Serial / type</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Purchase</th><th className="px-4 py-3">Expiry</th><th className="px-4 py-3">Status</th>{onHistory && <th className="px-4 py-3">History</th>}
       </tr></thead>
       <tbody>{equipment.map((item) => (
         <tr key={item.id} className="border-b border-sand/70 last:border-0 hover:bg-cream/70">
@@ -93,6 +112,7 @@ const EquipmentTable = ({ equipment }: { equipment: Extinguisher[] }) => (
           <td className="whitespace-nowrap px-4 py-4 text-slate-500">{date(item.purchase_date)}</td>
           <td className="whitespace-nowrap px-4 py-4 font-semibold">{date(item.expiry_date)}</td>
           <td className="px-4 py-4"><Status value={item.status} /></td>
+          {onHistory && <td className="px-4 py-4"><button className="btn-secondary !px-3 !py-2" onClick={() => onHistory(item)}>View</button></td>}
         </tr>
       ))}</tbody>
     </table>
@@ -105,12 +125,18 @@ const Empty = ({ text }: { text: string }) => <div className="px-4 py-14 text-ce
 export const DashboardPage = () => {
   const dispatch = useAppDispatch();
   const { logout, hasRole } = useAuth();
+  const location = useLocation();
   const user = useAppSelector((state) => state.auth.user)!;
   const state = useAppSelector((store) => store.inventory);
   const [section, setSection] = useState<Section>("dashboard");
   const [mobileNav, setMobileNav] = useState(false);
   const [modal, setModal] = useState<"customer" | "extinguisher" | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>();
+  const [historyEquipment, setHistoryEquipment] = useState<Extinguisher | null>(null);
   const [search, setSearch] = useState("");
+  const [authMessage, setAuthMessage] = useState(
+    (location.state as { successMessage?: string } | null)?.successMessage ?? "",
+  );
   const allowedNav = useMemo(() => nav.filter((item) => item.roles.includes(user.role as never)), [user.role]);
 
   useEffect(() => {
@@ -125,6 +151,7 @@ export const DashboardPage = () => {
     if (section === "logs") dispatch(fetchLogs());
     if (section === "notifications") dispatch(fetchNotifications());
     if (section === "extinguishers") dispatch(fetchExtinguishers());
+    if (section === "inspections" || section === "serviceRequests") dispatch(fetchExtinguishers());
   }, [dispatch, section]);
 
   useEffect(() => {
@@ -136,6 +163,10 @@ export const DashboardPage = () => {
     setSearch("");
     setMobileNav(false);
     dispatch(clearFeedback());
+  };
+
+  const confirmLogout = () => {
+    if (window.confirm("Are you sure you want to sign out?")) logout();
   };
 
   const refresh = () => {
@@ -168,7 +199,7 @@ export const DashboardPage = () => {
             </button>
           ))}
         </nav>
-        <button onClick={logout} className="mt-auto flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-white/60 hover:bg-white/10 hover:text-white">
+        <button onClick={confirmLogout} className="mt-auto flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-white/60 hover:bg-white/10 hover:text-white">
           <LogOut size={18} /> Sign out
         </button>
       </aside>
@@ -184,22 +215,28 @@ export const DashboardPage = () => {
         </header>
 
         <div className="p-4 sm:p-7">
+          {authMessage && <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"><span className="flex items-center gap-2"><CircleCheck size={18} /> {authMessage}</span><button className="rounded-lg p-1 hover:bg-emerald-100" onClick={() => setAuthMessage("")} aria-label="Dismiss success message"><X size={16} /></button></div>}
           {state.error && <div className="mb-5 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{state.error}</div>}
           {state.notice && <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{state.notice}</div>}
 
           {section === "dashboard" && <Overview />}
           {section === "extinguishers" && <Extinguishers search={search} setSearch={setSearch} openForm={() => setModal("extinguisher")} />}
-          {section === "customers" && <Customers search={search} setSearch={setSearch} openForm={() => setModal("customer")} />}
+          {section === "customers" && <Customers search={search} setSearch={setSearch} openForm={() => { setSelectedCustomer(undefined); setModal("customer"); }} />}
           {section === "users" && <UserAccounts />}
+          {section === "inspections" && <InspectionsPanel equipment={state.extinguishers.records} canManage={hasRole("ADMIN", "STAFF")} />}
+          {section === "serviceRequests" && <ServiceRequestsPanel equipment={state.extinguishers.records} isCustomer={hasRole("CUSTOMER")} canManage={hasRole("ADMIN", "STAFF")} />}
           {section === "notifications" && <Notifications />}
+          {section === "managementReports" && <ManagementReportsPanel />}
           {section === "reports" && <Reports />}
+          {section === "settings" && <NotificationSettingsPanel />}
           {section === "logs" && <Logs />}
           {section === "profile" && <ProfileForm />}
         </div>
       </main>
 
-      {modal === "customer" && <Modal title="Register customer" onClose={() => setModal(null)}><CustomerForm onSaved={() => { setModal(null); dispatch(fetchCustomers()); dispatch(fetchSummary()); }} /></Modal>}
+      {modal === "customer" && <Modal title={selectedCustomer ? "Update customer" : "Register customer"} onClose={() => { setModal(null); setSelectedCustomer(undefined); }}><CustomerForm customer={selectedCustomer} onSaved={() => { setModal(null); setSelectedCustomer(undefined); dispatch(fetchCustomers()); dispatch(fetchSummary()); }} /></Modal>}
       {modal === "extinguisher" && <Modal title="Register extinguisher purchase" onClose={() => setModal(null)}><ExtinguisherForm customers={state.customers.records} onSaved={() => { setModal(null); dispatch(fetchExtinguishers()); dispatch(fetchSummary()); }} /></Modal>}
+      {historyEquipment && <HistoryModal extinguisher={historyEquipment} onClose={() => setHistoryEquipment(null)} />}
     </div>
   );
 
@@ -218,7 +255,7 @@ export const DashboardPage = () => {
       </div>
       <div className="mt-7 grid gap-5 xl:grid-cols-[1.6fr_0.8fr]">
         <section className="card overflow-hidden"><div className="flex items-center justify-between px-5 py-4"><div><h3 className="font-black">Upcoming expiry dates</h3><p className="mt-1 text-xs text-slate-400">Equipment requiring the closest attention</p></div><button onClick={() => chooseSection("extinguishers")} className="text-xs font-black uppercase tracking-wider text-moss">View all</button></div><EquipmentTable equipment={state.extinguishers.records.slice(0, 5)} /></section>
-        <section className="rounded-2xl bg-forest p-5 text-white shadow-card"><ClipboardList className="text-ember" size={23} /><h3 className="mt-7 text-2xl font-black tracking-tight">Compliance summary</h3><p className="mt-2 text-sm leading-6 text-white/60">Keep expired units moving toward servicing or replacement. Ignored overdue reminders escalate automatically.</p><div className="mt-8 space-y-3 text-sm"><div className="flex justify-between border-b border-white/10 pb-3"><span className="text-white/60">Customers</span><strong>{summary?.customers ?? 0}</strong></div><div className="flex justify-between border-b border-white/10 pb-3"><span className="text-white/60">Active units</span><strong>{summary?.extinguishers.active ?? 0}</strong></div>{!hasRole("CUSTOMER") && <div className="flex justify-between"><span className="text-white/60">Open police reports</span><strong>{summary?.openPoliceReports ?? 0}</strong></div>}</div></section>
+        <section className="rounded-2xl bg-forest p-5 text-white shadow-card"><ClipboardList className="text-ember" size={23} /><h3 className="mt-7 text-2xl font-black tracking-tight">Compliance summary</h3><p className="mt-2 text-sm leading-6 text-white/60">Keep expired units moving toward servicing or replacement. Ignored overdue reminders escalate automatically.</p><div className="mt-8 space-y-3 text-sm"><div className="flex justify-between border-b border-white/10 pb-3"><span className="text-white/60">Customers</span><strong>{summary?.customers ?? 0}</strong></div><div className="flex justify-between border-b border-white/10 pb-3"><span className="text-white/60">Active units</span><strong>{summary?.extinguishers.active ?? 0}</strong></div><div className="flex justify-between border-b border-white/10 pb-3"><span className="text-white/60">Inspections due</span><strong>{summary?.dueInspections ?? 0}</strong></div><div className="flex justify-between border-b border-white/10 pb-3"><span className="text-white/60">Pending service</span><strong>{summary?.pendingServiceRequests ?? 0}</strong></div>{!hasRole("CUSTOMER") && <div className="flex justify-between"><span className="text-white/60">Open police reports</span><strong>{summary?.openPoliceReports ?? 0}</strong></div>}</div></section>
       </div>
     </>;
   }
@@ -226,21 +263,27 @@ export const DashboardPage = () => {
   function Extinguishers({ search, setSearch, openForm }: { search: string; setSearch: (value: string) => void; openForm: () => void }) {
     return <section className="card overflow-hidden">
       <Toolbar title="Extinguisher register" description="Purchase, lifecycle, and expiry details for every unit." search={search} setSearch={setSearch} onSearch={() => dispatch(fetchExtinguishers({ search }))} action={hasRole("ADMIN", "STAFF") ? <button className="btn-primary" onClick={openForm}><Plus size={16} /> Add extinguisher</button> : undefined} />
-      <EquipmentTable equipment={state.extinguishers.records} />
+      <EquipmentTable equipment={state.extinguishers.records} onHistory={setHistoryEquipment} />
       <Pagination pagination={state.extinguishers.pagination} onPage={(page) => dispatch(fetchExtinguishers({ page, search }))} />
     </section>;
   }
 
   function Customers({ search, setSearch, openForm }: { search: string; setSearch: (value: string) => void; openForm: () => void }) {
+    const archive = async (id: string) => {
+      if (!window.confirm("Archive this customer? Existing compliance records will be preserved.")) return;
+      await api.delete(`/inventory/customers/${id}`);
+      dispatch(fetchCustomers({ search }));
+      dispatch(fetchSummary());
+    };
     return <section className="card overflow-hidden">
       <Toolbar title="Customers" description="Contact details retained for reminders and compliance follow-up." search={search} setSearch={setSearch} onSearch={() => dispatch(fetchCustomers({ search }))} action={<button className="btn-primary" onClick={openForm}><Plus size={16} /> Add customer</button>} />
-      <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead><tr className="border-b border-sand text-xs uppercase tracking-wider text-slate-400"><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Address</th><th className="px-4 py-3">Registered</th></tr></thead><tbody>{state.customers.records.map((customer) => <tr key={customer.id} className="border-b border-sand/70 last:border-0 hover:bg-cream/70"><td className="px-4 py-4"><strong>{customer.full_name}</strong><span className="block text-xs text-slate-400">{customer.company_name || "Individual customer"}</span></td><td className="px-4 py-4"><span className="block">{customer.email}</span><span className="text-xs text-slate-400">{customer.phone}</span></td><td className="max-w-xs px-4 py-4 text-slate-500">{customer.address}</td><td className="whitespace-nowrap px-4 py-4 text-slate-500">{date(customer.created_at)}</td></tr>)}</tbody></table>{!state.customers.records.length && <Empty text="No customers found." />}</div>
+      <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead><tr className="border-b border-sand text-xs uppercase tracking-wider text-slate-400"><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Address</th><th className="px-4 py-3">Registered</th><th className="px-4 py-3">Actions</th></tr></thead><tbody>{state.customers.records.map((customer) => <tr key={customer.id} className="border-b border-sand/70 last:border-0 hover:bg-cream/70"><td className="px-4 py-4"><strong>{customer.full_name}</strong><span className="block text-xs text-slate-400">{customer.company_name || "Individual customer"}</span></td><td className="px-4 py-4"><span className="block">{customer.email}</span><span className="text-xs text-slate-400">{customer.phone}</span></td><td className="max-w-xs px-4 py-4 text-slate-500">{customer.address}</td><td className="whitespace-nowrap px-4 py-4 text-slate-500">{date(customer.created_at)}</td><td className="px-4 py-4"><div className="flex gap-2"><button className="rounded-lg p-2 text-moss hover:bg-moss/10" title="Edit customer" onClick={() => { setSelectedCustomer(customer); setModal("customer"); }}><Pencil size={16} /></button>{hasRole("ADMIN") && <button className="rounded-lg p-2 text-red-600 hover:bg-red-50" title="Archive customer" onClick={() => void archive(customer.id)}><Trash2 size={16} /></button>}</div></td></tr>)}</tbody></table>{!state.customers.records.length && <Empty text="No customers found." />}</div>
       <Pagination pagination={state.customers.pagination} onPage={(page) => dispatch(fetchCustomers({ page, search }))} />
     </section>;
   }
 
   function Notifications() {
-    return <section className="card overflow-hidden"><div className="px-5 py-4"><h2 className="text-lg font-black">Notification center</h2><p className="mt-1 text-sm text-slate-400">Email and in-app expiry events are kept together.</p></div><div className="divide-y divide-sand">{state.notifications.records.map((item) => <div key={item.id} className={`flex gap-4 px-5 py-4 ${item.is_read ? "bg-white" : "bg-amber-50/40"}`}><div className={`mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-xl ${item.type === "POLICE_ESCALATION" || item.type === "EXPIRY_OVERDUE" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"}`}><Bell size={17} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><strong>{item.title}</strong>{!item.is_read && <span className="rounded-full bg-ember px-2 py-0.5 text-[10px] font-black uppercase text-white">New</span>}</div><p className="mt-1 text-sm leading-6 text-slate-500">{item.message}</p><p className="mt-2 text-xs text-slate-400">{stamp(item.created_at)} {item.email_sent_at ? "- email processed" : ""}</p></div>{!item.is_read && <button onClick={() => dispatch(markNotificationRead(item.id))} className="self-center rounded-xl p-2 text-moss hover:bg-moss/10" title="Mark as read"><CheckCircle2 size={20} /></button>}</div>)}{!state.notifications.records.length && <Empty text="No notifications yet." />}</div><Pagination pagination={state.notifications.pagination} onPage={(page) => dispatch(fetchNotifications(page))} /></section>;
+    return <section className="card overflow-hidden"><div className="px-5 py-4"><h2 className="text-lg font-black">Notification center</h2><p className="mt-1 text-sm text-slate-400">Email and in-app expiry events are kept together.</p></div><div className="divide-y divide-sand">{state.notifications.records.map((item) => <div key={item.id} className={`flex gap-4 px-5 py-4 ${item.is_read ? "bg-white" : "bg-amber-50/40"}`}><div className={`mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-xl ${item.type === "POLICE_ESCALATION" || item.type === "EXPIRY_OVERDUE" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"}`}><Bell size={17} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><strong>{item.title}</strong>{!item.is_read && <span className="rounded-full bg-ember px-2 py-0.5 text-[10px] font-black uppercase text-white">New</span>}</div><p className="mt-1 text-sm leading-6 text-slate-500">{item.message}</p><p className="mt-2 text-xs text-slate-400">{stamp(item.created_at)} {item.email_sent_at ? `- ${item.reminder_count} email reminder(s)` : ""}</p></div>{!item.is_read && <button onClick={() => dispatch(markNotificationRead(item.id))} className="self-center rounded-xl p-2 text-moss hover:bg-moss/10" title="Mark as read"><CheckCircle2 size={20} /></button>}</div>)}{!state.notifications.records.length && <Empty text="No notifications yet." />}</div><Pagination pagination={state.notifications.pagination} onPage={(page) => dispatch(fetchNotifications(page))} /></section>;
   }
 
   function Reports() {
