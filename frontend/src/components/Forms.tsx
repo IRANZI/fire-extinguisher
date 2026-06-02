@@ -13,14 +13,14 @@ const Field = ({
   </label>
 );
 
-export const CustomerForm = ({ onSaved }: { onSaved: () => void }) => {
+export const CustomerForm = ({ customer, onSaved }: { customer?: Customer; onSaved: () => void }) => {
   const [form, setForm] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    address: "",
-    nationalId: "",
-    companyName: "",
+    fullName: customer?.full_name ?? "",
+    email: customer?.email ?? "",
+    phone: customer?.phone ?? "",
+    address: customer?.address ?? "",
+    nationalId: customer?.national_id ?? "",
+    companyName: customer?.company_name ?? "",
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -30,7 +30,8 @@ export const CustomerForm = ({ onSaved }: { onSaved: () => void }) => {
     setSaving(true);
     setError("");
     try {
-      await api.post("/inventory/customers", form);
+      if (customer) await api.patch(`/inventory/customers/${customer.id}`, form);
+      else await api.post("/inventory/customers", form);
       onSaved();
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -48,7 +49,7 @@ export const CustomerForm = ({ onSaved }: { onSaved: () => void }) => {
       <Field label="Company name" value={form.companyName} onChange={(event) => setForm({ ...form, companyName: event.target.value })} />
       <Field label="Address" required value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} />
       {error && <div className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-2">{error}</div>}
-      <button className="btn-primary sm:col-span-2" disabled={saving}><Save size={16} /> {saving ? "Saving..." : "Register customer"}</button>
+      <button className="btn-primary sm:col-span-2" disabled={saving}><Save size={16} /> {saving ? "Saving..." : customer ? "Update customer" : "Register customer"}</button>
     </form>
   );
 };
@@ -171,4 +172,3 @@ export const ProfileForm = () => {
     </section>
   );
 };
-

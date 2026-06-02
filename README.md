@@ -14,11 +14,18 @@ SafeHub is a microservice-oriented fire extinguisher compliance platform. A comp
 | --- | --- | --- | --- |
 | API gateway | `4000` | Single browser-facing API origin and health aggregation | `http://localhost:4000/docs` |
 | Auth service | `4001` | Signup, login, JWT identity, role accounts | `http://localhost:4001/docs` |
-| Inventory service | `4002` | Customers, equipment, in-app alerts, reports, audit logs | `http://localhost:4002/docs` |
+| Extinguisher service | `4002` | Equipment lifecycle, inspections, service requests, in-app alerts | `http://localhost:4002/docs` |
 | Notification service | `4003` | Scheduled expiry scan and email delivery logs | `http://localhost:4003/docs` |
+| Customer service | `4004` | Customer profile registration and maintenance | `http://localhost:4004/docs` |
+| Police alert service | `4005` | Compliance escalation review | `http://localhost:4005/docs` |
+| Report service | `4006` | Dashboards, management reports, audit logs | `http://localhost:4006/docs` |
 | React frontend | `5173` | Responsive role-aware application | `http://localhost:5173` |
 
-The services use separate `fems_auth`, `fems_inventory`, and `fems_notification` databases. The notification worker communicates with inventory through an internal secret and the frontend accesses services through the gateway.
+The services use `fems_auth`, `fems_inventory`, and `fems_notification` databases. Customer, extinguisher, police alert, and report services share the existing `fems_inventory` operational database so the service extraction remains compatible with current records. The notification worker communicates with the extinguisher service through an internal secret and the frontend accesses services through the gateway.
+
+The gateway keeps `/api/inventory/...` compatibility routes for the current frontend while also exposing domain paths such as `/api/customers`, `/api/extinguishers`, `/api/police-alerts`, and `/api/reports`.
+
+Docker exposes its PostgreSQL container on host port `5433` so it can coexist with a Windows PostgreSQL installation using port `5432`.
 
 ## Roles
 
@@ -69,8 +76,11 @@ Copy-Item .env.example .env
 npm.cmd install
 npm.cmd run build
 npm.cmd run dev:auth
-npm.cmd run dev:inventory
+npm.cmd run dev:customer
+npm.cmd run dev:extinguisher
 npm.cmd run dev:notification
+npm.cmd run dev:police-alert
+npm.cmd run dev:report
 npm.cmd run dev:gateway
 npm.cmd run dev:frontend
 ```
@@ -82,9 +92,18 @@ Run each `dev:*` command in its own terminal.
 The notification worker uses `SCAN_CRON` (`0 8 * * *` by default) and can also be triggered from the admin or staff dashboard.
 
 1. Expiring equipment receives an `EXPIRY_WARNING` within `EXPIRY_WARNING_DAYS`.
-2. On or after expiry, inventory changes the unit status to `EXPIRED` and creates an `EXPIRY_OVERDUE` alert.
+2. On or after expiry, the extinguisher service changes the unit status to `EXPIRED` and creates an `EXPIRY_OVERDUE` alert.
 3. Alerts appear in the customer portal and are sent by email.
-4. If the overdue alert stays unread for `ESCALATION_GRACE_DAYS`, SafeHub creates a police report, adds a police in-app notification, and emails `POLICE_CONTACT_EMAIL`.
+4. Reminder timing, maximum attempts, and the escalation grace period can be updated from the admin **Settings** screen.
+5. If the overdue alert stays unread after the configured reminder attempts and grace period, SafeHub creates a police report, adds a police in-app notification, and emails `POLICE_CONTACT_EMAIL`.
+
+## Operational Modules
+
+- **Inspections:** Staff schedule routine, annual, and post-service inspections. Customers can view their schedules.
+- **Service requests:** Customers request servicing, renewal, or replacement. Staff track each request through completion.
+- **Extinguisher history:** Purchase, expiry, inspection, and service-request activity is retained per extinguisher.
+- **Management reports:** Staff and admins can view monthly sales, due inspections, and pending service work.
+- **Customer archive:** Admins can archive customer profiles while preserving historical compliance records.
 
 When SMTP variables are blank, the notification service uses Nodemailer's JSON transport and records `PREVIEW` deliveries. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` for real email.
 

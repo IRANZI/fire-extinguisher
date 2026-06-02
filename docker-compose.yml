@@ -5,7 +5,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: user
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -21,6 +21,7 @@ services:
       dockerfile: services/auth-service/Dockerfile
     env_file: .env
     environment:
+      NODE_ENV: production
       AUTH_DATABASE_URL: postgres://postgres:user@postgres:5432/fems_auth
     depends_on:
       postgres:
@@ -28,13 +29,15 @@ services:
     ports:
       - "4001:4001"
 
-  inventory-service:
+  extinguisher-service:
     build:
       context: .
-      dockerfile: services/inventory-service/Dockerfile
+      dockerfile: services/extinguisher-service/Dockerfile
     env_file: .env
     environment:
-      INVENTORY_DATABASE_URL: postgres://postgres:user@postgres:5432/fems_inventory
+      NODE_ENV: production
+      EXTINGUISHER_DATABASE_URL: postgres://postgres:user@postgres:5432/fems_inventory
+      NOTIFICATION_SERVICE_URL: http://notification-service:4003
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,15 +50,58 @@ services:
       dockerfile: services/notification-service/Dockerfile
     env_file: .env
     environment:
+      NODE_ENV: production
       NOTIFICATION_DATABASE_URL: postgres://postgres:user@postgres:5432/fems_notification
-      INVENTORY_SERVICE_URL: http://inventory-service:4002
+      EXTINGUISHER_SERVICE_URL: http://extinguisher-service:4002
     depends_on:
       postgres:
         condition: service_healthy
-      inventory-service:
+      extinguisher-service:
         condition: service_started
     ports:
       - "4003:4003"
+
+  customer-service:
+    build:
+      context: .
+      dockerfile: services/customer-service/Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      CUSTOMER_DATABASE_URL: postgres://postgres:user@postgres:5432/fems_inventory
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4004:4004"
+
+  police-alert-service:
+    build:
+      context: .
+      dockerfile: services/police-alert-service/Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      POLICE_ALERT_DATABASE_URL: postgres://postgres:user@postgres:5432/fems_inventory
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4005:4005"
+
+  report-service:
+    build:
+      context: .
+      dockerfile: services/report-service/Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      REPORT_DATABASE_URL: postgres://postgres:user@postgres:5432/fems_inventory
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4006:4006"
 
   api-gateway:
     build:
@@ -63,13 +109,20 @@ services:
       dockerfile: services/api-gateway/Dockerfile
     env_file: .env
     environment:
+      NODE_ENV: production
       AUTH_SERVICE_URL: http://auth-service:4001
-      INVENTORY_SERVICE_URL: http://inventory-service:4002
+      EXTINGUISHER_SERVICE_URL: http://extinguisher-service:4002
       NOTIFICATION_SERVICE_URL: http://notification-service:4003
+      CUSTOMER_SERVICE_URL: http://customer-service:4004
+      POLICE_ALERT_SERVICE_URL: http://police-alert-service:4005
+      REPORT_SERVICE_URL: http://report-service:4006
     depends_on:
       - auth-service
-      - inventory-service
+      - extinguisher-service
       - notification-service
+      - customer-service
+      - police-alert-service
+      - report-service
     ports:
       - "4000:4000"
 

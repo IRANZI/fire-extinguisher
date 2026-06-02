@@ -23,6 +23,7 @@ export interface Customer {
   address: string;
   national_id?: string;
   company_name?: string;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -49,7 +50,41 @@ export interface AppNotification {
   title: string;
   message: string;
   is_read: boolean;
+  reminder_count: number;
+  last_reminded_at?: string;
   email_sent_at?: string;
+  created_at: string;
+}
+
+export interface ExtinguisherHistory {
+  id: string;
+  action: string;
+  actor_role?: string;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface Inspection {
+  id: string;
+  extinguisher_id: string;
+  serial_number: string;
+  customer_name: string;
+  scheduled_date: string;
+  completed_date?: string;
+  inspection_type: "ROUTINE" | "ANNUAL" | "POST_SERVICE";
+  status: "SCHEDULED" | "COMPLETED" | "MISSED" | "CANCELLED";
+  notes?: string;
+}
+
+export interface ServiceRequest {
+  id: string;
+  extinguisher_id: string;
+  serial_number: string;
+  customer_name: string;
+  request_type: "SERVICE" | "RENEWAL" | "REPLACEMENT";
+  status: "REQUESTED" | "APPROVED" | "IN_PROGRESS" | "COMPLETED" | "REJECTED";
+  customer_notes?: string;
+  staff_notes?: string;
   created_at: string;
 }
 
@@ -85,5 +120,6 @@ export interface Summary {
   };
   unreadNotifications: number;
   openPoliceReports: number;
+  dueInspections: number;
+  pendingServiceRequests: number;
 }
-

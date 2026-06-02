@@ -28,6 +28,21 @@ export const logger = pino({
 
 export const httpLogger = pinoHttp({ logger });
 
+export const corsOrigin = (
+  origin: string | undefined,
+  callback: (error: Error | null, allowed?: boolean) => void,
+) => {
+  if (!origin) return callback(null, true);
+  const configuredOrigins = (process.env.FRONTEND_URL ?? "http://localhost:5173")
+    .split(",")
+    .map((value) => value.trim());
+  const isLocalDevelopmentOrigin =
+    process.env.NODE_ENV !== "production" &&
+    /^http:\/\/(localhost|127\.0\.0\.1):517\d$/.test(origin);
+
+  callback(null, configuredOrigins.includes(origin) || isLocalDevelopmentOrigin);
+};
+
 export const getJwtSecret = () => {
   if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required");
   return process.env.JWT_SECRET;

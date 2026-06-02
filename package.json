@@ -8,12 +8,15 @@
     "frontend"
   ],
   "scripts": {
-    "build": "npm run build -w @fems/shared && npm run build -w @fems/auth-service && npm run build -w @fems/inventory-service && npm run build -w @fems/notification-service && npm run build -w @fems/api-gateway && npm run build -w @fems/frontend",
-    "dev:auth": "npm run dev -w @fems/auth-service",
-    "dev:inventory": "npm run dev -w @fems/inventory-service",
-    "dev:notification": "npm run dev -w @fems/notification-service",
-    "dev:gateway": "npm run dev -w @fems/api-gateway",
-    "dev:frontend": "npm run dev -w @fems/frontend"
+    "build": "node init && npm run build -w @fems/shared && npm run build -w @fems/auth-service && npm run build -w @fems/customer-service && npm run build -w @fems/extinguisher-service && npm run build -w @fems/notification-service && npm run build -w @fems/police-alert-service && npm run build -w @fems/report-service && npm run build -w @fems/api-gateway && npm run build -w @fems/frontend",
+    "dev:auth": "node init && npm run dev -w @fems/auth-service",
+    "dev:customer": "node init && npm run dev -w @fems/customer-service",
+    "dev:extinguisher": "node init && npm run dev -w @fems/extinguisher-service",
+    "dev:inventory": "node init && npm run dev:extinguisher",
+    "dev:notification": "node init && npm run dev -w @fems/notification-service",
+    "dev:police-alert": "node init && npm run dev -w @fems/police-alert-service",
+    "dev:report": "node init && npm run dev -w @fems/report-service",
+    "dev:gateway": "node init && npm run dev -w @fems/api-gateway",
+    "dev:frontend": "node init && npm run dev -w @fems/frontend"
   }
 }
-

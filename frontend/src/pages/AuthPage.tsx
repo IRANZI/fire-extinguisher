@@ -20,7 +20,15 @@ export const AuthPage = ({ mode }: { mode: "login" | "signup" }) => {
     const action = isSignup
       ? await dispatch(signup(form))
       : await dispatch(login({ email: form.email, password: form.password }));
-    if ((isSignup ? signup : login).fulfilled.match(action)) navigate("/");
+    if ((isSignup ? signup : login).fulfilled.match(action)) {
+      navigate("/", {
+        state: {
+          successMessage: isSignup
+            ? "Account created successfully. You are now signed in."
+            : "Login successful. Welcome back.",
+        },
+      });
+    }
   };
 
   return (
@@ -108,4 +116,3 @@ export const AuthPage = ({ mode }: { mode: "login" | "signup" }) => {
     </main>
   );
 };
-
